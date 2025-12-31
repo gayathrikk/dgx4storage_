@@ -1,6 +1,8 @@
 package dd.project;
 
 import java.io.InputStream;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Properties;
 
 import javax.mail.Message;
@@ -18,109 +20,118 @@ import com.jcraft.jsch.ChannelExec;
 import com.jcraft.jsch.JSch;
 
 public class dgx4storgae {
-	@Test
-    public void testStorageDetails() {
-        JSch jsch = new JSch();
-        com.jcraft.jsch.Session session = null;
-        try {
-            String user = "hbp";
-            String host = "dgx4.humanbrain.in";
-            String password = "Health#12";
-            int port = 22;
-            session = jsch.getSession(user, host, port);
-            session.setPassword(password);
-            session.setConfig("StrictHostKeyChecking", "no");
-            session.connect();
-            Channel channel = session.openChannel("exec");
-            ((ChannelExec) channel).setCommand("df -h /mnt/local/nvmestorage");
-            channel.setInputStream(null);
-            ((ChannelExec) channel).setErrStream(System.err);
-            InputStream in = channel.getInputStream();
-            channel.connect();
-            byte[] tmp = new byte[1024];
-            StringBuilder output = new StringBuilder();
-            while (true) {
-                while (in.available() > 0) {
-                    int i = in.read(tmp, 0, 1024);
-                    if (i < 0) break;
-                    output.append(new String(tmp, 0, i));
-                }
-                if (channel.isClosed()) {
-                    if (in.available() > 0) continue;
-                    System.out.println("Exit status: " + channel.getExitStatus());
-                    break;
-                }
-                try {
-                    Thread.sleep(1000);
-                } catch (Exception ee) {
-                    ee.printStackTrace();
-                }
-            }
+	 @Test
+	    public void testStorageDetails() {
+	        JSch jsch = new JSch();
+	        com.jcraft.jsch.Session session = null;
+	        try {
+	            String user = "appUser";
+	            String host = "dgx4.humanbrain.in";
+	            String password = "Brain@123";  // ⚠ Consider using environment variables instead.
+	            int port = 22;
+	            session = jsch.getSession(user, host, port);
+	            session.setPassword(password);
+	            session.setConfig("StrictHostKeyChecking", "no");
+	            session.connect();
 
-            String[] lines = output.toString().split("\n");
-            System.out.println("---------------------------------------PPl STORAGE REPORT:--------------------------------------");
-            System.out.println("+------------------------------------+------+-------+-------+--------+-------------------------+");
-            System.out.println("|       Filesystem                   | Size | Used  | Avail |  Use%  | Mounted on              |");
-            System.out.println("+------------------------------------+------+-------+-------+--------+-------------------------+");
+	            Channel channel = session.openChannel("exec");
+	            ((ChannelExec) channel).setCommand("df -h /mnt/local/nvmestorage");
+	            channel.setInputStream(null);
+	            ((ChannelExec) channel).setErrStream(System.err);
+	            InputStream in = channel.getInputStream();
+	            channel.connect();
 
-            StringBuilder emailContent = new StringBuilder();
-            boolean sendEmail = false;
-            for (int i = 1; i < lines.length; i++) {
-                String[] parts = lines[i].trim().split("\\s+");
-                System.out.printf("| %-34s | %4s | %5s | %5s | %6s | %-20s |\n", parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]);
-                System.out.println("+------------------------------------+------+-------+-------+--------+-------------------------+");
+	            byte[] tmp = new byte[1024];
+	            StringBuilder output = new StringBuilder();
+	            while (true) {
+	                while (in.available() > 0) {
+	                    int i = in.read(tmp, 0, 1024);
+	                    if (i < 0) break;
+	                    output.append(new String(tmp, 0, i));
+	                }
+	                if (channel.isClosed()) {
+	                    if (in.available() > 0) continue;
+	                    break;
+	                }
+	                Thread.sleep(1000);
+	            }
 
-                int usePercent = Integer.parseInt(parts[4].replace("%", ""));
-                if (usePercent > 0) {
-                    sendEmail = true;
-                    if (parts[0].equals("df -h /mnt/local/nvmestorage")) {
-                        emailContent.append("dgx4.humanbrain.in  - nvmeShare used storage is exceeding 70%\n");
-                    }
-                }
-            }
-            if (sendEmail) {
-                sendEmailAlert(emailContent.toString());
-            }
-            channel.disconnect();
-            session.disconnect();
-        } catch (Exception e) {
-            e.printStackTrace();
-            System.out.println("Test encountered an exception: " + e.getMessage());
-        }
-    }
+	            channel.disconnect();
+	            session.disconnect();
 
-	 private void sendEmailAlert(String messageBody) {
-	        // Recipient's email ID needs to be mentioned.
-	  
-	    	String[] to = {"divya.d@htic.iitm.ac.in"};
-	    	String[] cc = {"nathan.i@htic.iitm.ac.in, venip@htic.iitm.ac.in"};
-	        String[] bcc = {};  	
-	    
-	        // Sender's email ID needs to be mentioned
-	        String from = "gayathri@htic.iitm.ac.in";
-	        // Assuming you are sending email through Gmail's SMTP
+	            String[] lines = output.toString().split("\n");
+	            System.out.println("Files in /mnt/local/nvmestorage:\n");
+
+	            int todayFileCount = 0;
+	            int oldFileCount = 0;
+	            StringBuilder todayFiles = new StringBuilder();
+	            StringBuilder oldFiles = new StringBuilder();
+	        
+	            // Define date format and today's date outside the loop
+	            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+	            String todayDate = sdf.format(new Date());
+
+	            for (String line : lines) {
+	                System.out.println("DEBUG: " + line);  // Print each line for debugging
+
+	                if (!line.startsWith("total") && !line.startsWith("drwx")) {
+	                    String[] parts = line.trim().split("\\s+", 8); // Splitting properly
+
+	                    if (parts.length >= 8) {
+	                        String fileDate = parts[5];   // Picking date in YYYY-MM-DD format
+	                        String fileName = parts[7];   // This should be the filename
+
+	                        System.out.println("Parsed Date: " + fileDate + ", File: " + fileName); // Debugging output
+
+	                        if (fileDate.equals(todayDate)) {
+	                            todayFileCount++;
+	                            todayFiles.append("<span style='color:red;'>" + fileDate + " - " + fileName + "</span><br>");
+	                        } else {
+	                            oldFileCount++;
+	                            oldFiles.append(fileDate + " - " + fileName + "<br>");
+	                        }
+	                    }
+	                }
+	            }
+
+	            // **Send email only if old files exist**
+	            if (oldFileCount > 0) {  
+	                sendEmailAlert(todayFiles.toString(), oldFiles.toString(), todayFileCount, oldFileCount, host);
+	            } else {
+	                System.out.println("No old files found. Email not sent.");
+	            }
+
+	        } catch (Exception e) {
+	            e.printStackTrace();
+	        }
+	    }  
+
+	    private void sendEmailAlert(String todayFiles, String oldFiles, int todayFileCount, int oldFileCount, String machineName) {
+	       String[] to = {"nathan.i@htic.iitm.ac.in"};
+    		String[] cc = {"venip@htic.iitm.ac.in", "nitheshkumarsundhar@gmail.com"};
+
+    		 String[] bcc = {"divya.d@htic.iitm.ac.in"};
+
+	        String from = "automationsoftware25@gmail.com";
 	        String host = "smtp.gmail.com";
-	        // Get system properties
+
 	        Properties properties = System.getProperties();
-	        // Setup mail server
 	        properties.put("mail.smtp.host", host);
 	        properties.put("mail.smtp.port", "465");
 	        properties.put("mail.smtp.ssl.enable", "true");
 	        properties.put("mail.smtp.auth", "true");
-	        // Get the Session object and pass username and password
+
 	        Session session = Session.getInstance(properties, new javax.mail.Authenticator() {
 	            protected PasswordAuthentication getPasswordAuthentication() {
-	                return new PasswordAuthentication("gayathri@htic.iitm.ac.in", "Gayu@0918");
+	                return new PasswordAuthentication("automationsoftware25@gmail.com", "wjzcgaramsqvagxu"); // Fix: Use app password
 	            }
 	        });
-	        // Used to debug SMTP issues
+
 	        session.setDebug(true);
 	        try {
-	            // Create a default MimeMessage object.
 	            MimeMessage message = new MimeMessage(session);
-	            // Set From: header field of the header.
 	            message.setFrom(new InternetAddress(from));
-	            // Set To: header field of the header.
+
 	            for (String recipient : to) {
 	                message.addRecipient(Message.RecipientType.TO, new InternetAddress(recipient));
 	            }
@@ -130,19 +141,23 @@ public class dgx4storgae {
 	            for (String bccRecipient : bcc) {
 	                message.addRecipient(Message.RecipientType.BCC, new InternetAddress(bccRecipient));
 	            }
-	            // Set Subject: header field
-	            message.setSubject("PP1.humanbrain.in - STORAGE ALERT ⚠️ ");
-	            // Set the actual message
-	            message.setContent("This email has been automatically generated:<br>" + messageBody + 
-	            	    "Attention and Action Required <br>" + messageBody +
-	            	    "<br>dgx4 <b>nvmeShare</b> storage utilization has crossed <b style='color:red;'>70%</b> :<br>" + messageBody + 
-	            	    "<br>Please clear unnecessary files to free up space and avoid storage-related issues.<br>" + messageBody, "text/html");
 
-	            System.out.println("sending...");
-	            // Send message
+	            message.setSubject("ALERT: Old Files Found in " + machineName + " 📂");
+	            String content = "<p>This is an automated alert:</p>" +
+	                    "<p>The directory <b> /mnt/local/nvmestorage"
+	                    + "</b> on machine <b style='color:blue;'>" + machineName + "</b> contains old files.</p>" +
+	                    "<p><b>" + oldFileCount + "</b> old files exist:</p>" +
+	                    "<pre>" + oldFiles + "</pre>" +
+	                    "<p>Please review and take necessary action.</p>" +
+	                    "<p>Best Regards,<br>Automated Monitoring System</p>";
+
+	            message.setContent(content, "text/html");
+	            System.out.println("Sending alert email...");
 	            Transport.send(message);
-	            System.out.println("Sent message successfully....");
+	            System.out.println("Email sent successfully!");
+
 	        } catch (MessagingException mex) {
 	            mex.printStackTrace();
 	        }
-    }}
+	    }
+	}
